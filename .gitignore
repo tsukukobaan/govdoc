@@ -45,6 +45,7 @@ next-env.d.ts
 # database
 *.db
 *.db-journal
+dump.sql
 
 # NISTEP data (large CSV)
 /data/nistep/
