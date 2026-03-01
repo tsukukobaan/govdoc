@@ -2,6 +2,8 @@ import { prisma } from "@/lib/db";
 import { MinistryCard } from "@/components/ministry/MinistryCard";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const ministries = await prisma.ministry.findMany({
     where: {
