@@ -52,3 +52,5 @@ next-env.d.ts
 # Python
 scripts/.venv/
 __pycache__/
+
+.vercel
