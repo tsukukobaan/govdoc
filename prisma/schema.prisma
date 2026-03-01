@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Ministry {
+  id         Int         @id @default(autoincrement())
+  slug       String      @unique
+  name       String
+  nameEn     String      @map("name_en")
+  url        String
+  councilUrl String?     @map("council_url")
+  color      String      @default("#1a1a2e")
+  sortOrder  Int         @default(0) @map("sort_order")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+  committees Committee[]
+
+  @@map("ministries")
+}
+
+model Committee {
+  id            Int        @id @default(autoincrement())
+  ministryId    Int        @map("ministry_id")
+  name          String
+  slug          String
+  category      String     @default("advisory_council")
+  url           String?
+  isActive      Boolean    @default(true) @map("is_active")
+  documentCount Int        @default(0) @map("document_count")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+  ministry      Ministry   @relation(fields: [ministryId], references: [id])
+  documents     Document[]
+
+  @@unique([ministryId, slug])
+  @@map("committees")
+}
+
+model Document {
+  id              Int       @id @default(autoincrement())
+  committeeId     Int       @map("committee_id")
+  title           String
+  url             String
+  meetingDate     DateTime? @map("meeting_date")
+  docType         String    @default("minutes") @map("doc_type")
+  source          String    @default("nistep")
+  sourceId        String?   @map("source_id")
+  lastConfirmedAt DateTime? @map("last_confirmed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  committee       Committee @relation(fields: [committeeId], references: [id])
+
+  @@index([committeeId])
+  @@index([meetingDate])
+  @@index([source])
+  @@map("documents")
+}

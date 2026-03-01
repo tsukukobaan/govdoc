@@ -1,0 +1,173 @@
+[
+  {
+    "slug": "cas",
+    "name": "内閣官房",
+    "nameEn": "Cabinet Secretariat",
+    "url": "https://www.cas.go.jp/",
+    "councilUrl": "https://www.cas.go.jp/jp/gaiyou/jimu/jinjikyoku/satei_01_04_03.html",
+    "color": "#7c3aed",
+    "sortOrder": 1
+  },
+  {
+    "slug": "cao",
+    "name": "内閣府",
+    "nameEn": "Cabinet Office",
+    "url": "https://www.cao.go.jp/",
+    "councilUrl": "https://www.cao.go.jp/council.html",
+    "color": "#2563eb",
+    "sortOrder": 2
+  },
+  {
+    "slug": "digital",
+    "name": "デジタル庁",
+    "nameEn": "Digital Agency",
+    "url": "https://www.digital.go.jp/",
+    "councilUrl": "https://www.digital.go.jp/councils",
+    "color": "#0891b2",
+    "sortOrder": 3
+  },
+  {
+    "slug": "soumu",
+    "name": "総務省",
+    "nameEn": "Ministry of Internal Affairs and Communications",
+    "url": "https://www.soumu.go.jp/",
+    "councilUrl": "https://www.soumu.go.jp/menu_kyotsuu/whatsnew/kaigi_index.html",
+    "color": "#059669",
+    "sortOrder": 4
+  },
+  {
+    "slug": "moj",
+    "name": "法務省",
+    "nameEn": "Ministry of Justice",
+    "url": "https://www.moj.go.jp/",
+    "councilUrl": "https://www.moj.go.jp/shingi1/shingikai_index.html",
+    "color": "#4338ca",
+    "sortOrder": 5
+  },
+  {
+    "slug": "mofa",
+    "name": "外務省",
+    "nameEn": "Ministry of Foreign Affairs",
+    "url": "https://www.mofa.go.jp/",
+    "councilUrl": null,
+    "color": "#0369a1",
+    "sortOrder": 6
+  },
+  {
+    "slug": "mof",
+    "name": "財務省",
+    "nameEn": "Ministry of Finance",
+    "url": "https://www.mof.go.jp/",
+    "councilUrl": "https://www.mof.go.jp/about_mof/councils/index.htm",
+    "color": "#b45309",
+    "sortOrder": 7
+  },
+  {
+    "slug": "mext",
+    "name": "文部科学省",
+    "nameEn": "Ministry of Education, Culture, Sports, Science and Technology",
+    "url": "https://www.mext.go.jp/",
+    "councilUrl": "https://www.mext.go.jp/b_menu/shingi/main_b5.htm",
+    "color": "#c2410c",
+    "sortOrder": 8
+  },
+  {
+    "slug": "mhlw",
+    "name": "厚生労働省",
+    "nameEn": "Ministry of Health, Labour and Welfare",
+    "url": "https://www.mhlw.go.jp/",
+    "councilUrl": "https://www.mhlw.go.jp/stf/shingi/indexshingi.html",
+    "color": "#dc2626",
+    "sortOrder": 9
+  },
+  {
+    "slug": "maff",
+    "name": "農林水産省",
+    "nameEn": "Ministry of Agriculture, Forestry and Fisheries",
+    "url": "https://www.maff.go.jp/",
+    "councilUrl": "https://www.maff.go.jp/j/council/index.html",
+    "color": "#16a34a",
+    "sortOrder": 10
+  },
+  {
+    "slug": "meti",
+    "name": "経済産業省",
+    "nameEn": "Ministry of Economy, Trade and Industry",
+    "url": "https://www.meti.go.jp/",
+    "councilUrl": "https://www.meti.go.jp/shingikai/",
+    "color": "#0d9488",
+    "sortOrder": 11
+  },
+  {
+    "slug": "mlit",
+    "name": "国土交通省",
+    "nameEn": "Ministry of Land, Infrastructure, Transport and Tourism",
+    "url": "https://www.mlit.go.jp/",
+    "councilUrl": "https://www.mlit.go.jp/policy/shingikai/index.html",
+    "color": "#2563eb",
+    "sortOrder": 12
+  },
+  {
+    "slug": "env",
+    "name": "環境省",
+    "nameEn": "Ministry of the Environment",
+    "url": "https://www.env.go.jp/",
+    "councilUrl": "https://www.env.go.jp/council/",
+    "color": "#65a30d",
+    "sortOrder": 13
+  },
+  {
+    "slug": "mod",
+    "name": "防衛省",
+    "nameEn": "Ministry of Defense",
+    "url": "https://www.mod.go.jp/",
+    "councilUrl": null,
+    "color": "#475569",
+    "sortOrder": 14
+  },
+  {
+    "slug": "fsa",
+    "name": "金融庁",
+    "nameEn": "Financial Services Agency",
+    "url": "https://www.fsa.go.jp/",
+    "councilUrl": "https://www.fsa.go.jp/singi/",
+    "color": "#0284c7",
+    "sortOrder": 15
+  },
+  {
+    "slug": "npa",
+    "name": "警察庁",
+    "nameEn": "National Police Agency",
+    "url": "https://www.npa.go.jp/",
+    "councilUrl": null,
+    "color": "#1e3a5f",
+    "sortOrder": 16
+  },
+  {
+    "slug": "kantei",
+    "name": "首相官邸",
+    "nameEn": "Prime Minister's Office",
+    "url": "https://www.kantei.go.jp/",
+    "councilUrl": "https://www.kantei.go.jp/jp/singi/index.html",
+    "color": "#991b1b",
+    "sortOrder": 17
+  },
+  {
+    "slug": "diet",
+    "name": "国会",
+    "nameEn": "National Diet",
+    "url": "https://kokkai.ndl.go.jp/",
+    "councilUrl": "https://kokkai.ndl.go.jp/",
+    "color": "#7e22ce",
+    "sortOrder": 18
+  },
+  {
+    "slug": "other",
+    "name": "その他",
+    "nameEn": "Other",
+    "url": "",
+    "councilUrl": null,
+    "color": "#6b7280",
+    "sortOrder": 99
+  }
+]

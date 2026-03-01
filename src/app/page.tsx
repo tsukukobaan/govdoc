@@ -1,65 +1,187 @@
-import Image from "next/image";
+import { prisma } from "@/lib/db";
+import { MinistryCard } from "@/components/ministry/MinistryCard";
+import Link from "next/link";
 
-export default function Home() {
+export default async function Home() {
+  const ministries = await prisma.ministry.findMany({
+    where: {
+      committees: {
+        some: {
+          documentCount: { gt: 0 },
+        },
+      },
+    },
+    include: {
+      _count: {
+        select: { committees: true },
+      },
+    },
+    orderBy: { sortOrder: "asc" },
+  });
+
+  const ministriesWithCounts = await Promise.all(
+    ministries.map(async (m) => {
+      const docCount = await prisma.document.count({
+        where: { committee: { ministryId: m.id } },
+      });
+      return { ...m, documentCount: docCount };
+    })
+  );
+
+  const totalDocs = await prisma.document.count();
+  const totalCommittees = await prisma.committee.count({
+    where: { documentCount: { gt: 0 } },
+  });
+
+  const recentDocs = await prisma.document.findMany({
+    take: 10,
+    orderBy: { meetingDate: "desc" },
+    where: { meetingDate: { not: null } },
+    include: {
+      committee: {
+        include: { ministry: true },
+      },
+    },
+  });
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div>
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        <StatCard label="総文書数" value={totalDocs.toLocaleString()} />
+        <StatCard
+          label="省庁・機関"
+          value={ministriesWithCounts.length.toString()}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+        <StatCard
+          label="審議会・委員会"
+          value={totalCommittees.toLocaleString()}
+        />
+        <StatCard label="データソース" value="NISTEP" />
+      </div>
+
+      {/* Ministry grid */}
+      <h2 className="text-xl font-bold text-slate-800 mb-4">
+        省庁・機関別インデックス
+      </h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
+        {ministriesWithCounts.map((m) => (
+          <MinistryCard
+            key={m.id}
+            slug={m.slug}
+            name={m.name}
+            nameEn={m.nameEn}
+            color={m.color}
+            documentCount={m.documentCount}
+            committeeCount={m._count.committees}
+          />
+        ))}
+      </div>
+
+      {/* Recent documents */}
+      <h2 className="text-xl font-bold text-slate-800 mb-4">
+        最近の議事録・資料
+      </h2>
+      <div className="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+        {recentDocs.map((doc) => (
+          <div key={doc.id} className="px-4 py-3 flex items-center gap-4">
+            <span className="text-sm text-slate-400 shrink-0 w-24">
+              {doc.meetingDate
+                ? new Date(doc.meetingDate).toLocaleDateString("ja-JP")
+                : ""}
+            </span>
+            <Link
+              href={`/ministries/${doc.committee.ministry.slug}`}
+              className="text-xs px-2 py-0.5 rounded-full shrink-0"
+              style={{
+                backgroundColor: doc.committee.ministry.color + "15",
+                color: doc.committee.ministry.color,
+              }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
+              {doc.committee.ministry.name}
+            </Link>
+            <span className="text-sm text-slate-500 shrink-0 hidden md:inline">
+              {doc.committee.name}
+            </span>
             <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              href={doc.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-blue-600 hover:underline truncate"
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+              {doc.title}
+            </a>
+          </div>
+        ))}
+      </div>
+
+      {/* External Links */}
+      <h2 className="text-xl font-bold text-slate-800 mt-10 mb-4">
+        関連リンク
+      </h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <ExternalLink
+          title="国会会議録検索システム"
+          description="国立国会図書館が提供する国会議事録の全文検索"
+          url="https://kokkai.ndl.go.jp/"
+        />
+        <ExternalLink
+          title="e-Gov 法令検索"
+          description="日本の法令の検索・閲覧"
+          url="https://laws.e-gov.go.jp/"
+        />
+        <ExternalLink
+          title="e-Gov パブリックコメント"
+          description="意見募集中の案件一覧"
+          url="https://public-comment.e-gov.go.jp/pcm/list"
+        />
+        <ExternalLink
+          title="白書等一覧"
+          description="各省庁が発行する白書・年次報告書"
+          url="https://www.e-gov.go.jp/about-government/white-papers.html"
+        />
+        <ExternalLink
+          title="e-Gov データポータル"
+          description="政府のオープンデータカタログ"
+          url="https://data.e-gov.go.jp/"
+        />
+        <ExternalLink
+          title="NISTEP 議事録メタデータ"
+          description="本サイトのデータソース（GitHub）"
+          url="https://github.com/NISTEP/minutes"
+        />
+      </div>
     </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-white rounded-lg border border-slate-200 p-4 text-center">
+      <div className="text-2xl font-bold text-slate-800">{value}</div>
+      <div className="text-sm text-slate-500 mt-1">{label}</div>
+    </div>
+  );
+}
+
+function ExternalLink({
+  title,
+  description,
+  url,
+}: {
+  title: string;
+  description: string;
+  url: string;
+}) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block bg-white rounded-lg border border-slate-200 p-4 hover:shadow-md hover:border-slate-300 transition-all"
+    >
+      <h3 className="font-semibold text-blue-600 text-sm">{title}</h3>
+      <p className="text-xs text-slate-500 mt-1">{description}</p>
+    </a>
   );
 }
