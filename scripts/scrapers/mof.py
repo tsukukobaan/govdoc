@@ -1,53 +1,64 @@
-"""Scraper for Financial Services Agency (金融庁) advisory councils."""
-import re
+"""Scraper for Ministry of Finance (財務省) advisory councils."""
 from urllib.parse import urljoin
 
 from .base import BaseScraper, normalize, parse_date
 
 
-class FSAScraper(BaseScraper):
-    ministry_slug = "fsa"
-    INDEX_URL = "https://www.fsa.go.jp/singi/"
+class MOFScraper(BaseScraper):
+    ministry_slug = "mof"
+    BASE_URL = "https://www.mof.go.jp"
+    INDEX_URL = "https://www.mof.go.jp/about_mof/councils/index.htm"
 
     def scrape(self) -> list[dict]:
         records = []
         seen_urls: set[str] = set()
         visited_pages: set[str] = set()
 
-        print("  Fetching FSA singi index...")
+        print("  Fetching MOF councils master index...")
         try:
             soup = self.fetch(self.INDEX_URL)
         except Exception as e:
             print(f"  Fatal: cannot fetch index: {e}")
             return records
 
-        # Find all links to council subpages
-        council_links: list[tuple[str, str]] = []
+        # Collect council page links
+        council_pages: list[tuple[str, str]] = []
         seen_council: set[str] = set()
         for a in soup.find_all("a", href=True):
             href = a["href"]
             text = normalize(a.get_text())
+
             if not text or len(text) < 3:
                 continue
             if href.startswith("#"):
                 continue
-            # Links to council index pages
-            if "/singi/" in href and href != "/singi/":
-                full_url = urljoin(self.INDEX_URL, href)
-                if full_url not in seen_council and full_url != self.INDEX_URL:
-                    seen_council.add(full_url)
-                    council_links.append((full_url, text))
 
-        print(f"  Found {len(council_links)} council links")
+            full_url = urljoin(self.INDEX_URL, href)
 
-        for i, (url, council_name) in enumerate(council_links):
+            if "mof.go.jp" not in full_url:
+                continue
+            # Council pages under /about_mof/councils/
+            if "/about_mof/councils/" not in full_url:
+                continue
+            if full_url == self.INDEX_URL:
+                continue
+
+            if full_url not in seen_council:
+                seen_council.add(full_url)
+                council_pages.append((full_url, text))
+
+        print(f"  Found {len(council_pages)} council page links")
+
+        for i, (url, name) in enumerate(council_pages):
+            if i >= 80:
+                break
             try:
-                page_records = self._scrape_council(url, council_name, seen_urls, visited_pages)
+                page_records = self._scrape_council(url, name, seen_urls, visited_pages)
                 records.extend(page_records)
                 if page_records:
-                    print(f"  [{i+1}/{len(council_links)}] {council_name}: {len(page_records)} records")
+                    print(f"  [{i+1}/{len(council_pages)}] {name}: {len(page_records)} records")
             except Exception as e:
-                print(f"  [{i+1}] Error on {council_name}: {e}")
+                print(f"  [{i+1}] Error on {name}: {e}")
 
         print(f"  Total records: {len(records)}")
         return records
@@ -64,10 +75,9 @@ class FSAScraper(BaseScraper):
         except Exception:
             return records
 
-        # Extract meetings from this page
         records.extend(self._extract_meetings(soup, url, council_name, seen_urls))
 
-        # Also follow sub-links to find more meeting pages (one level deeper)
+        # Follow sub-links one level deeper
         sub_links = []
         for a in soup.find_all("a", href=True):
             href = a["href"]
@@ -80,26 +90,23 @@ class FSAScraper(BaseScraper):
 
             full_url = urljoin(url, href)
 
-            # Only follow fsa.go.jp links
-            if "fsa.go.jp" not in full_url:
+            if "mof.go.jp" not in full_url:
                 continue
             if full_url in visited_pages:
                 continue
 
-            # Follow links that look like sub-council or meeting-list pages
             is_sub_council = any(kw in text for kw in [
                 "議事要旨", "議事録", "開催状況", "会議", "部会", "分科会",
                 "小委員会", "ワーキング", "研究会", "懇談会", "検討会",
             ])
             is_meeting_list = any(kw in href for kw in [
-                "gijiyoushi", "gijiroku", "giji", "kaisai", "siryou",
+                "gijiyoushi", "gijiroku", "kaisai", "shingi", "proceedings",
             ])
 
             if is_sub_council or is_meeting_list:
                 sub_name = council_name if any(kw in text for kw in ["議事", "開催"]) else text
                 sub_links.append((full_url, sub_name))
 
-        # Scrape sub-pages (shallow - no further recursion)
         for sub_url, sub_name in sub_links[:30]:
             if sub_url in visited_pages:
                 continue
@@ -117,7 +124,6 @@ class FSAScraper(BaseScraper):
         """Extract meeting records from a page (tables or lists)."""
         records = []
 
-        # Try table-based structure
         for table in soup.find_all("table"):
             rows = table.find_all("tr")
             for row in rows:
@@ -150,7 +156,6 @@ class FSAScraper(BaseScraper):
                         "doc_type": doc_type,
                     })
 
-        # Also try list-based structure
         for li in soup.find_all("li"):
             li_text = normalize(li.get_text())
             if len(li_text) < 10:
@@ -199,7 +204,6 @@ class FSAScraper(BaseScraper):
         if "答申" in text or "報告書" in text:
             return "material"
 
-        # URL patterns
         if any(kw in href for kw in ["gijiroku", "giji", "gijiyoushi"]):
             return "minutes"
         if "shiryou" in href or "siryou" in href:
@@ -211,7 +215,7 @@ class FSAScraper(BaseScraper):
 if __name__ == "__main__":
     import sys
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    scraper = FSAScraper()
+    scraper = MOFScraper()
     records = scraper.scrape()
     if records:
         scraper.save_to_db(records)

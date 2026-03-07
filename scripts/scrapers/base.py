@@ -1,4 +1,5 @@
 """Base scraper for ministry advisory council pages."""
+import logging
 import re
 import sqlite3
 import time
@@ -10,6 +11,9 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+from requests.exceptions import ConnectionError, HTTPError, Timeout
+
+logger = logging.getLogger(__name__)
 
 PROJECT_DIR = Path(__file__).parent.parent.parent
 DB_PATH = PROJECT_DIR / "dev.db"
@@ -65,6 +69,9 @@ class BaseScraper:
 
     ministry_slug: str = ""
     request_interval: float = 2.0
+    use_playwright: bool = False
+    playwright_fallback: bool = True
+    playwright_channel: str | None = None  # e.g. "chrome" to use system Chrome
 
     def __init__(self):
         self.session = requests.Session()
@@ -79,13 +86,68 @@ class BaseScraper:
         self.session.mount("https://", HTTPAdapter(max_retries=retry))
         self.session.mount("http://", HTTPAdapter(max_retries=retry))
 
+        # Playwright (lazy-initialized)
+        self._playwright = None
+        self._browser = None
+        self._browser_context = None
+
+    def _ensure_browser(self):
+        """Lazily start Playwright and launch a Chromium browser."""
+        if self._browser_context is not None:
+            return
+        from playwright.sync_api import sync_playwright
+        self._playwright = sync_playwright().start()
+        launch_opts: dict = {"headless": True}
+        if self.playwright_channel:
+            launch_opts["channel"] = self.playwright_channel
+        self._browser = self._playwright.chromium.launch(**launch_opts)
+        self._browser_context = self._browser.new_context(
+            locale="ja-JP",
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/133.0.0.0 Safari/537.36"
+            ),
+        )
+
+    def _fetch_with_playwright(self, url: str) -> BeautifulSoup:
+        """Fetch a URL using a real Chromium browser."""
+        self._ensure_browser()
+        page = self._browser_context.new_page()
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            html = page.content()
+            return BeautifulSoup(html, "html.parser")
+        finally:
+            page.close()
+
     def fetch(self, url: str) -> BeautifulSoup:
         """Fetch a URL and return BeautifulSoup object."""
         time.sleep(self.request_interval)
-        resp = self.session.get(url, timeout=30)
-        resp.raise_for_status()
-        resp.encoding = resp.apparent_encoding or "utf-8"
-        return BeautifulSoup(resp.text, "html.parser")
+        if self.use_playwright:
+            return self._fetch_with_playwright(url)
+        try:
+            resp = self.session.get(url, timeout=30)
+            resp.raise_for_status()
+            resp.encoding = resp.apparent_encoding or "utf-8"
+            return BeautifulSoup(resp.text, "html.parser")
+        except (HTTPError, ConnectionError, Timeout) as e:
+            if not self.playwright_fallback:
+                raise
+            logger.info("requests failed for %s (%s), falling back to Playwright", url, e)
+            return self._fetch_with_playwright(url)
+
+    def close(self):
+        """Shut down Playwright browser if it was started."""
+        if self._browser_context is not None:
+            self._browser_context.close()
+            self._browser_context = None
+        if self._browser is not None:
+            self._browser.close()
+            self._browser = None
+        if self._playwright is not None:
+            self._playwright.stop()
+            self._playwright = None
 
     def scrape(self) -> list[dict]:
         """Override this method. Return list of dicts with keys:
@@ -99,7 +161,9 @@ class BaseScraper:
             print(f"Database not found: {DB_PATH}")
             return
 
-        conn = sqlite3.connect(str(DB_PATH))
+        conn = sqlite3.connect(str(DB_PATH), timeout=60)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
         cursor = conn.cursor()
 
         # Get ministry id
@@ -187,4 +251,73 @@ class BaseScraper:
         conn.close()
 
         print(f"  Inserted: {inserted}, Skipped (duplicates): {skipped}")
+        return inserted
+
+    # --- Attachment extraction methods ---
+
+    FILE_EXTENSIONS = [".pdf", ".xlsx", ".xls", ".docx", ".doc", ".pptx", ".ppt"]
+
+    def _detect_file_type(self, url: str) -> str | None:
+        """Detect file type from URL extension."""
+        url_lower = url.lower().split("?")[0]
+        for ext in self.FILE_EXTENSIONS:
+            if url_lower.endswith(ext):
+                return ext[1:]
+        return None
+
+    def extract_attachments_from_page(self, page_url: str) -> list[dict]:
+        """Fetch an HTML meeting page and extract links to PDF/Excel/etc."""
+        soup = self.fetch(page_url)
+        attachments = []
+        seen = set()
+        for a in soup.find_all("a", href=True):
+            full_url = urljoin(page_url, a["href"])
+            file_type = self._detect_file_type(full_url)
+            if file_type and full_url not in seen:
+                seen.add(full_url)
+                title = normalize(a.get_text()) if a.get_text().strip() else full_url.split("/")[-1]
+                attachments.append({
+                    "title": title,
+                    "url": full_url,
+                    "file_type": file_type,
+                })
+        return attachments
+
+    def save_attachments_to_db(self, document_id: int, attachments: list[dict]):
+        """Save extracted attachments to the attachments table."""
+        if not DB_PATH.exists() or not attachments:
+            return 0
+
+        conn = sqlite3.connect(str(DB_PATH), timeout=60)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
+        cursor = conn.cursor()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Get existing attachment URLs for this document
+        cursor.execute(
+            "SELECT url FROM attachments WHERE document_id = ?",
+            (document_id,),
+        )
+        existing = {r[0] for r in cursor.fetchall()}
+
+        inserted = 0
+        for att in attachments:
+            if att["url"] in existing:
+                continue
+            cursor.execute(
+                """INSERT INTO attachments (document_id, title, url, file_type, is_downloaded, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, 0, ?, ?)""",
+                (document_id, att["title"], att["url"], att["file_type"], now, now),
+            )
+            inserted += 1
+
+        # Mark document as index page crawled
+        cursor.execute(
+            "UPDATE documents SET is_index_page = 1, index_crawled_at = ? WHERE id = ?",
+            (now, document_id),
+        )
+
+        conn.commit()
+        conn.close()
         return inserted

@@ -1,9 +1,7 @@
 """Scraper for Ministry of Economy, Trade and Industry (経済産業省) advisory councils."""
+import datetime
 import re
-import time
 from urllib.parse import urljoin
-
-from bs4 import BeautifulSoup
 
 from .base import BaseScraper, normalize, parse_date
 
@@ -12,30 +10,15 @@ class METIScraper(BaseScraper):
     ministry_slug = "meti"
     BASE_URL = "https://www.meti.go.jp"
     request_interval = 3.0
-
-    def fetch(self, url: str) -> BeautifulSoup:
-        """Override fetch to handle METI's encoding (often Shift-JIS)."""
-        time.sleep(self.request_interval)
-        resp = self.session.get(url, timeout=60)
-        resp.raise_for_status()
-        # Try Shift-JIS first since METI often uses it
-        for enc in ["utf-8", "shift_jis", "euc-jp"]:
-            try:
-                text = resp.content.decode(enc)
-                if "審議会" in text or "shingikai" in text:
-                    return BeautifulSoup(text, "html.parser")
-            except (UnicodeDecodeError, ValueError):
-                continue
-        # Fallback
-        resp.encoding = resp.apparent_encoding or "utf-8"
-        return BeautifulSoup(resp.text, "html.parser")
+    use_playwright = True
+    playwright_channel = "chrome"  # System Chrome needed to bypass TLS fingerprint block
 
     def scrape(self) -> list[dict]:
         records = []
         seen_urls: set[str] = set()
 
-        # Scrape year-based index pages (2018-2025)
-        for year in range(2018, 2026):
+        # Scrape year-based index pages (2018-current)
+        for year in range(2018, datetime.datetime.now().year + 1):
             url = f"{self.BASE_URL}/shingikai/index_{year}.html"
             print(f"  Fetching METI {year}...")
             try:
@@ -84,9 +67,17 @@ class METIScraper(BaseScraper):
             committee_name = self._extract_committee_name(href, text)
 
             # Extract date from text or surrounding context
-            parent = a.parent
-            parent_text = normalize(parent.get_text()) if parent else ""
-            meeting_date = parse_date(text) or parse_date(parent_text)
+            # METI uses <dl> structure: <dt>2025年3月31日</dt><dd><a>...</a></dd>
+            meeting_date = parse_date(text)
+            if not meeting_date:
+                parent = a.parent
+                if parent:
+                    meeting_date = parse_date(normalize(parent.get_text()))
+            if not meeting_date:
+                # Check preceding <dt> element (the dl/dt/dd pattern)
+                prev_dt = a.find_previous("dt")
+                if prev_dt:
+                    meeting_date = parse_date(normalize(prev_dt.get_text()))
 
             doc_type = "minutes"
             if "議事要旨" in text:
@@ -132,6 +123,9 @@ if __name__ == "__main__":
     import sys
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     scraper = METIScraper()
-    records = scraper.scrape()
-    if records:
-        scraper.save_to_db(records)
+    try:
+        records = scraper.scrape()
+        if records:
+            scraper.save_to_db(records)
+    finally:
+        scraper.close()

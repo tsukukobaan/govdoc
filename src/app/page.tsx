@@ -1,50 +1,66 @@
 import { prisma } from "@/lib/db";
 import { MinistryCard } from "@/components/ministry/MinistryCard";
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
-  const ministries = await prisma.ministry.findMany({
-    where: {
-      committees: {
-        some: {
-          documentCount: { gt: 0 },
+const getCachedData = unstable_cache(
+  async () => {
+    const [ministries, totalDocs, totalCommittees, recentDocs] = await Promise.all([
+      prisma.ministry.findMany({
+        where: {
+          committees: {
+            some: {
+              documentCount: { gt: 0 },
+            },
+          },
         },
-      },
-    },
-    include: {
-      _count: {
-        select: { committees: true },
-      },
-    },
-    orderBy: { sortOrder: "asc" },
-  });
+        include: {
+          _count: {
+            select: { committees: true },
+          },
+        },
+        orderBy: { sortOrder: "asc" },
+      }),
+      prisma.document.count(),
+      prisma.committee.count({
+        where: { documentCount: { gt: 0 } },
+      }),
+      prisma.document.findMany({
+        take: 10,
+        orderBy: { meetingDate: "desc" },
+        where: { meetingDate: { not: null } },
+        include: {
+          committee: {
+            include: { ministry: true },
+          },
+        },
+      }),
+    ]);
 
-  const ministriesWithCounts = await Promise.all(
-    ministries.map(async (m) => {
-      const docCount = await prisma.document.count({
-        where: { committee: { ministryId: m.id } },
-      });
-      return { ...m, documentCount: docCount };
-    })
-  );
+    const ministriesWithCounts = await Promise.all(
+      ministries.map(async (m) => {
+        const docCount = await prisma.document.count({
+          where: { committee: { ministryId: m.id } },
+        });
+        return { ...m, documentCount: docCount };
+      })
+    );
 
-  const totalDocs = await prisma.document.count();
-  const totalCommittees = await prisma.committee.count({
-    where: { documentCount: { gt: 0 } },
-  });
+    return { ministriesWithCounts, totalDocs, totalCommittees, recentDocs };
+  },
+  ["home-page-data"],
+  { revalidate: 86400 }
+);
 
-  const recentDocs = await prisma.document.findMany({
-    take: 10,
-    orderBy: { meetingDate: "desc" },
-    where: { meetingDate: { not: null } },
-    include: {
-      committee: {
-        include: { ministry: true },
-      },
-    },
-  });
+export default async function Home() {
+  const { ministriesWithCounts, totalDocs, totalCommittees, recentDocs } =
+    await getCachedData();
+
+  const latestDate = recentDocs[0]?.meetingDate
+    ? new Date(recentDocs[0].meetingDate).toLocaleDateString("ja-JP")
+    : "-";
 
   return (
     <div>
@@ -59,7 +75,7 @@ export default async function Home() {
           label="審議会・委員会"
           value={totalCommittees.toLocaleString()}
         />
-        <StatCard label="データソース" value="NISTEP" />
+        <StatCard label="最終更新" value={latestDate} />
       </div>
 
       {/* Ministry grid */}
@@ -102,9 +118,12 @@ export default async function Home() {
             >
               {doc.committee.ministry.name}
             </Link>
-            <span className="text-sm text-slate-500 shrink-0 hidden md:inline">
+            <Link
+              href={`/ministries/${doc.committee.ministry.slug}/committees/${doc.committee.slug}`}
+              className="text-sm text-slate-500 hover:text-blue-600 shrink-0 hidden md:inline"
+            >
               {doc.committee.name}
-            </span>
+            </Link>
             <a
               href={doc.url}
               target="_blank"

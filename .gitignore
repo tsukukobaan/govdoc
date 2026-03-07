@@ -54,4 +54,13 @@ dump.sql
 scripts/.venv/
 __pycache__/
 
+# PDF storage (local only)
+/storage/
+
+# Logs
+/logs/
+
+# MCP server (local dev tool)
+/mcp-server/
+
 .vercel

@@ -41,21 +41,44 @@ model Committee {
 }
 
 model Document {
-  id              Int       @id @default(autoincrement())
-  committeeId     Int       @map("committee_id")
+  id              Int          @id @default(autoincrement())
+  committeeId     Int          @map("committee_id")
   title           String
   url             String
-  meetingDate     DateTime? @map("meeting_date")
-  docType         String    @default("minutes") @map("doc_type")
-  source          String    @default("nistep")
-  sourceId        String?   @map("source_id")
-  lastConfirmedAt DateTime? @map("last_confirmed_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  committee       Committee @relation(fields: [committeeId], references: [id])
+  meetingDate     DateTime?    @map("meeting_date")
+  docType         String       @default("minutes") @map("doc_type")
+  source          String       @default("nistep")
+  sourceId        String?      @map("source_id")
+  lastConfirmedAt DateTime?    @map("last_confirmed_at")
+  isIndexPage     Boolean      @default(false) @map("is_index_page")
+  indexCrawledAt  DateTime?    @map("index_crawled_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  committee       Committee    @relation(fields: [committeeId], references: [id])
+  attachments     Attachment[]
 
   @@index([committeeId])
   @@index([meetingDate])
   @@index([source])
   @@map("documents")
+}
+
+model Attachment {
+  id           Int       @id @default(autoincrement())
+  documentId   Int       @map("document_id")
+  title        String
+  url          String
+  fileType     String    @default("pdf") @map("file_type")
+  fileSize     Int?      @map("file_size")
+  pageCount    Int?      @map("page_count")
+  localPath    String?   @map("local_path")
+  textContent  String?   @map("text_content")
+  isDownloaded Boolean   @default(false) @map("is_downloaded")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  document     Document  @relation(fields: [documentId], references: [id])
+
+  @@index([documentId])
+  @@index([url])
+  @@map("attachments")
 }

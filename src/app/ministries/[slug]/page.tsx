@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 86400;
 
 const PAGE_SIZE = 50;
 
@@ -38,38 +38,36 @@ export default async function MinistryPage({ params, searchParams }: PageProps) 
     whereClause.docType = type;
   }
 
-  // Get committees with their documents
-  const committees = await prisma.committee.findMany({
-    where: {
-      ministryId: ministry.id,
-      documentCount: { gt: 0 },
-    },
-    orderBy: { documentCount: "desc" },
-  });
+  // Run independent queries in parallel
+  const [committees, totalDocs, documents, years] = await Promise.all([
+    prisma.committee.findMany({
+      where: {
+        ministryId: ministry.id,
+        documentCount: { gt: 0 },
+      },
+      orderBy: { documentCount: "desc" },
+    }),
+    prisma.document.count({ where: whereClause }),
+    prisma.document.findMany({
+      where: whereClause,
+      include: {
+        committee: true,
+      },
+      orderBy: { meetingDate: "desc" },
+      skip: (currentPage - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    prisma.$queryRawUnsafe<{ year: number }[]>(
+      `SELECT DISTINCT CAST(strftime('%Y', meeting_date) AS INTEGER) as year
+       FROM documents d
+       JOIN committees c ON d.committee_id = c.id
+       WHERE c.ministry_id = ? AND d.meeting_date IS NOT NULL
+       ORDER BY year DESC`,
+      ministry.id
+    ),
+  ]);
 
-  // Get paginated documents
-  const totalDocs = await prisma.document.count({ where: whereClause });
   const totalPages = Math.ceil(totalDocs / PAGE_SIZE);
-
-  const documents = await prisma.document.findMany({
-    where: whereClause,
-    include: {
-      committee: true,
-    },
-    orderBy: { meetingDate: "desc" },
-    skip: (currentPage - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
-  });
-
-  // Get available years for filter
-  const years = await prisma.$queryRawUnsafe<{ year: number }[]>(
-    `SELECT DISTINCT CAST(strftime('%Y', meeting_date) AS INTEGER) as year
-     FROM documents d
-     JOIN committees c ON d.committee_id = c.id
-     WHERE c.ministry_id = ? AND d.meeting_date IS NOT NULL
-     ORDER BY year DESC`,
-    ministry.id
-  );
 
   const docTypes = [
     { value: "minutes", label: "議事録" },
@@ -172,9 +170,12 @@ export default async function MinistryPage({ params, searchParams }: PageProps) 
                       ? "資料"
                       : doc.docType}
               </span>
-              <span className="text-sm text-slate-500 shrink-0 hidden lg:inline max-w-48 truncate">
+              <Link
+                href={`/ministries/${slug}/committees/${doc.committee.slug}`}
+                className="text-sm text-slate-500 hover:text-blue-600 shrink-0 hidden lg:inline max-w-48 truncate"
+              >
                 {doc.committee.name}
-              </span>
+              </Link>
               <a
                 href={doc.url}
                 target="_blank"
@@ -232,15 +233,16 @@ export default async function MinistryPage({ params, searchParams }: PageProps) 
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {committees.map((c) => (
-          <div
+          <Link
             key={c.id}
-            className="bg-white rounded border border-slate-200 px-4 py-2 flex items-center justify-between text-sm"
+            href={`/ministries/${slug}/committees/${c.slug}`}
+            className="bg-white rounded border border-slate-200 px-4 py-2 flex items-center justify-between text-sm hover:bg-slate-50 hover:border-slate-300 transition-colors"
           >
             <span className="text-slate-700 truncate">{c.name}</span>
             <span className="text-slate-400 shrink-0 ml-2">
               {c.documentCount}件
             </span>
-          </div>
+          </Link>
         ))}
       </div>
     </div>
