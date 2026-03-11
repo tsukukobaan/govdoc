@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       steps:
-        description: "Comma-separated steps (scrape,kokkai,crawl,download,sync,fts)"
+        description: "Comma-separated steps (scrape,kokkai,crawl,download,fts)"
         required: false
         default: ""
-      skip_sync:
-        description: "Skip Turso sync & FTS rebuild"
+      skip_download:
+        description: "Skip PDF download step"
         required: false
         type: boolean
         default: false
@@ -20,6 +20,15 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 300
+
+    env:
+      # Scrapers write directly to Turso (no dev.db needed)
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
 
     steps:
       - name: Checkout
@@ -41,75 +50,24 @@ jobs:
         working-directory: web
         run: npm ci
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install Python dependencies
         working-directory: web/scripts
-        run: |
-          pip install requests beautifulsoup4 tqdm PyMuPDF boto3 python-dotenv
-
-      - name: Download dev.db from R2
-        working-directory: web
-        env:
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-        run: |
-          python -c "
-          import boto3, os
-          s3 = boto3.client('s3',
-            endpoint_url=f'https://{os.environ[\"R2_ACCOUNT_ID\"]}.r2.cloudflarestorage.com',
-            aws_access_key_id=os.environ['R2_ACCESS_KEY_ID'],
-            aws_secret_access_key=os.environ['R2_SECRET_ACCESS_KEY'],
-            region_name='auto')
-          try:
-            s3.download_file(os.environ['R2_BUCKET_NAME'], 'backups/dev.db', 'dev.db')
-            print('Downloaded dev.db from R2')
-          except Exception as e:
-            print(f'No backup found in R2: {e}')
-            print('Will start with empty DB if no local DB exists')
-          "
+        run: pip install -r requirements.txt
 
       - name: Run update pipeline
-        working-directory: web
-        env:
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        working-directory: web/scripts
         run: |
           ARGS="--continue-on-error"
           if [ -n "${{ github.event.inputs.steps }}" ]; then
             ARGS="$ARGS --steps ${{ github.event.inputs.steps }}"
           fi
-          if [ "${{ github.event.inputs.skip_sync }}" = "true" ]; then
-            ARGS="$ARGS --skip-sync"
+          if [ "${{ github.event.inputs.skip_download }}" = "true" ]; then
+            ARGS="$ARGS --skip-download"
           fi
-          python scripts/update_pipeline.py $ARGS
-
-      - name: Upload dev.db backup to R2
-        if: always()
-        working-directory: web
-        env:
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-        run: |
-          python -c "
-          import boto3, os
-          if not os.path.exists('dev.db'):
-            print('No dev.db to upload')
-            exit(0)
-          s3 = boto3.client('s3',
-            endpoint_url=f'https://{os.environ[\"R2_ACCOUNT_ID\"]}.r2.cloudflarestorage.com',
-            aws_access_key_id=os.environ['R2_ACCESS_KEY_ID'],
-            aws_secret_access_key=os.environ['R2_SECRET_ACCESS_KEY'],
-            region_name='auto')
-          s3.upload_file('dev.db', os.environ['R2_BUCKET_NAME'], 'backups/dev.db')
-          print('Uploaded dev.db backup to R2')
-          "
+          python update_pipeline.py $ARGS
 
       - name: Upload logs
         if: always()

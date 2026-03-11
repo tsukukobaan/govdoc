@@ -1,6 +1,6 @@
 """Crawl meeting pages to extract PDF/document attachment links.
 
-Reads documents from dev.db whose URLs point to HTML pages (not .pdf),
+Reads documents from the database whose URLs point to HTML pages (not .pdf),
 fetches each page, and extracts links to PDF/Excel/etc files,
 saving them to the attachments table.
 
@@ -10,7 +10,6 @@ Usage:
     python scripts/crawl_attachments.py --ministry meti  # Single ministry
 """
 import argparse
-import sqlite3
 import sys
 import traceback
 from pathlib import Path
@@ -19,8 +18,7 @@ from tqdm import tqdm
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-PROJECT_DIR = Path(__file__).parent.parent
-DB_PATH = PROJECT_DIR / "dev.db"
+from db import connect_db
 
 # Map ministry slugs to scraper classes that know how to fetch their pages
 SCRAPER_MAP = {
@@ -65,12 +63,7 @@ def main():
     parser.add_argument("--all-years", action="store_true", help="Process all years (default: 2021+)")
     args = parser.parse_args()
 
-    if not DB_PATH.exists():
-        print(f"Database not found: {DB_PATH}")
-        sys.exit(1)
-
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
+    conn = connect_db(row_factory=True)
     cursor = conn.cursor()
 
     # Find documents that haven't been crawled yet (is_index_page = 0 or NULL)
@@ -140,7 +133,7 @@ def main():
                         total_attachments += count
                     else:
                         # Mark as crawled even if no attachments found
-                        conn2 = sqlite3.connect(str(DB_PATH))
+                        conn2 = connect_db()
                         conn2.execute(
                             "UPDATE documents SET is_index_page = 1, index_crawled_at = datetime('now') WHERE id = ?",
                             (doc["id"],),

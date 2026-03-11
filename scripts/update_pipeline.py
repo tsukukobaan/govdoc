@@ -19,7 +19,7 @@ Usage:
 """
 import argparse
 import json
-import sqlite3
+import os
 import subprocess
 import sys
 import time
@@ -32,6 +32,10 @@ PROJECT_DIR = Path(__file__).parent.parent
 DB_PATH = PROJECT_DIR / "dev.db"
 LOGS_DIR = PROJECT_DIR / "logs"
 
+# When TURSO_DATABASE_URL is set, scrapers write directly to Turso,
+# so sync step is unnecessary and fts uses update_fts.ts.
+USING_TURSO = bool(os.environ.get("TURSO_DATABASE_URL"))
+
 ALL_STEPS = ["scrape", "kokkai", "crawl", "download", "sync", "fts"]
 
 STEP_DESCRIPTIONS = {
@@ -40,18 +44,16 @@ STEP_DESCRIPTIONS = {
     "crawl": "Crawl attachment links",
     "download": "Download PDFs & extract text",
     "sync": "Sync to Turso",
-    "fts": "Rebuild FTS index",
+    "fts": "Update FTS index",
 }
 
 
 def get_db_stats() -> dict:
     """Get current database statistics."""
-    if not DB_PATH.exists():
-        return {}
-    conn = sqlite3.connect(str(DB_PATH), timeout=30)
-    conn.execute("PRAGMA busy_timeout=30000")
+    from db import connect_db
     stats = {}
     try:
+        conn = connect_db()
         stats["documents"] = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
         stats["documents_by_source"] = {
             row[0]: row[1]
@@ -67,10 +69,9 @@ def get_db_stats() -> dict:
             "SELECT COUNT(*) FROM attachments WHERE text_content IS NOT NULL AND length(text_content) > 0"
         ).fetchone()[0]
         stats["committees"] = conn.execute("SELECT COUNT(*) FROM committees").fetchone()[0]
+        conn.close()
     except Exception as e:
         stats["error"] = str(e)
-    finally:
-        conn.close()
     return stats
 
 
@@ -204,6 +205,11 @@ def main():
             sys.exit(1)
     else:
         steps = list(ALL_STEPS)
+
+    # When writing directly to Turso, sync step is unnecessary
+    if USING_TURSO:
+        steps = [s for s in steps if s != "sync"]
+        print("(Turso direct mode: sync step skipped, scrapers write to Turso directly)")
 
     if args.skip_sync:
         steps = [s for s in steps if s not in ("sync", "fts")]

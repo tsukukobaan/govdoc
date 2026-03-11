@@ -3,3 +3,6 @@ playwright
 PyMuPDF
 boto3
 python-dotenv
+requests
+beautifulsoup4
+libsql-experimental

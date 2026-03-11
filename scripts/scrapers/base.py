@@ -1,7 +1,8 @@
 """Base scraper for ministry advisory council pages."""
 import logging
+import os
 import re
-import sqlite3
+import sys
 import time
 import unicodedata
 from datetime import datetime
@@ -13,10 +14,11 @@ import requests
 from bs4 import BeautifulSoup
 from requests.exceptions import ConnectionError, HTTPError, Timeout
 
-logger = logging.getLogger(__name__)
+# Allow importing db module from scripts/
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from db import connect_db
 
-PROJECT_DIR = Path(__file__).parent.parent.parent
-DB_PATH = PROJECT_DIR / "dev.db"
+logger = logging.getLogger(__name__)
 
 # Wareki (Japanese era) to seireki (Western calendar)
 GENGOU = {"明治": 1868, "大正": 1912, "昭和": 1926, "平成": 1989, "令和": 2019}
@@ -157,13 +159,7 @@ class BaseScraper:
 
     def save_to_db(self, records: list[dict]):
         """Save scraped records to the database."""
-        if not DB_PATH.exists():
-            print(f"Database not found: {DB_PATH}")
-            return
-
-        conn = sqlite3.connect(str(DB_PATH), timeout=60)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=30000")
+        conn = connect_db()
         cursor = conn.cursor()
 
         # Get ministry id
@@ -285,12 +281,10 @@ class BaseScraper:
 
     def save_attachments_to_db(self, document_id: int, attachments: list[dict]):
         """Save extracted attachments to the attachments table."""
-        if not DB_PATH.exists() or not attachments:
+        if not attachments:
             return 0
 
-        conn = sqlite3.connect(str(DB_PATH), timeout=60)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=30000")
+        conn = connect_db()
         cursor = conn.cursor()
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 

@@ -74,12 +74,17 @@ npx tsx scripts/migrate_fts.ts                         # Full FTS index rebuild
 
 ## Data Update Pipeline
 
-`scripts/update_pipeline.py` が全ステップを統合管理:
+`scripts/update_pipeline.py` が全ステップを統合管理。
+`scripts/db.py` がDB接続を抽象化:
+- `TURSO_DATABASE_URL` 設定時 → `libsql-experimental` でTurso直接書き込み（CI用）
+- 未設定時 → `sqlite3` でローカル `dev.db` に書き込み（ローカル開発用）
+
+ステップ:
 1. **scrape** — 省庁Webサイトのスクレイプ
 2. **kokkai** — 国会会議録APIからインポート
 3. **crawl** — 添付ファイルURL収集
 4. **download** — PDF DL & テキスト抽出 & R2アップロード
-5. **sync** — dev.db → Turso同期
+5. **sync** — dev.db → Turso同期（Turso直接モード時は自動スキップ）
 6. **fts** — FTS5インデックスの差分更新
 
 実行ログは `logs/update_YYYYMMDD_HHMMSS.json` に保存。

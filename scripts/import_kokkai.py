@@ -1,6 +1,5 @@
 """Import recent National Diet meeting records from kokkai.ndl.go.jp API."""
 import json
-import sqlite3
 import sys
 import time
 import urllib.request
@@ -10,8 +9,7 @@ from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-PROJECT_DIR = Path(__file__).parent.parent
-DB_PATH = PROJECT_DIR / "dev.db"
+from db import connect_db
 
 API_BASE = "https://kokkai.ndl.go.jp/api/meeting_list"
 MAX_RECORDS_PER_REQUEST = 100
@@ -36,11 +34,7 @@ def fetch_meetings(from_date: str, until_date: str, start_record: int = 1) -> di
 
 
 def main():
-    if not DB_PATH.exists():
-        print(f"Database not found: {DB_PATH}")
-        return
-
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = connect_db()
     cursor = conn.cursor()
 
     # Get or create the "国会" ministry

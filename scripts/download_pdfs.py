@@ -11,7 +11,6 @@ Usage:
 import argparse
 import os
 import re
-import sqlite3
 import sys
 import tempfile
 import time
@@ -26,10 +25,11 @@ from urllib3.util.retry import Retry
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 PROJECT_DIR = Path(__file__).parent.parent
-DB_PATH = PROJECT_DIR / "dev.db"
 
 # Load environment variables
 load_dotenv(PROJECT_DIR / ".env.local")
+
+from db import connect_db
 
 # Set up requests session with retry
 session = requests.Session()
@@ -88,10 +88,6 @@ def main():
     parser.add_argument("--ministry", type=str, default=None, help="Only download PDFs for this ministry slug")
     args = parser.parse_args()
 
-    if not DB_PATH.exists():
-        print(f"Database not found: {DB_PATH}")
-        sys.exit(1)
-
     # Validate R2 environment variables
     required_env = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME"]
     missing = [v for v in required_env if not os.environ.get(v)]
@@ -103,10 +99,7 @@ def main():
     bucket = os.environ["R2_BUCKET_NAME"]
     s3 = get_r2_client()
 
-    conn = sqlite3.connect(str(DB_PATH), timeout=60)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=30000")
+    conn = connect_db(row_factory=True)
 
     # Get pending PDF attachments with ministry/committee info
     query = """
