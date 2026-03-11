@@ -19,6 +19,35 @@
 
 ---
 
+## NEXT: 本番パイプライン稼働
+
+以下を順に実施して日次自動更新を稼働させる:
+
+1. **GitHub Actions Secrets を設定**
+   - リポジトリの Settings → Secrets and variables → Actions に追加:
+     - `TURSO_DATABASE_URL` — `libsql://govdoc-tsukukobaan.aws-ap-northeast-1.turso.io`
+     - `TURSO_AUTH_TOKEN` — Turso JWT auth token
+     - `R2_ACCOUNT_ID` — Cloudflare account ID
+     - `R2_ACCESS_KEY_ID` — R2 API key
+     - `R2_SECRET_ACCESS_KEY` — R2 secret
+     - `R2_BUCKET_NAME` — `govdoc-pdfs`
+
+2. **手動トリガーで初回テスト**
+   - Actions タブ → "Update GovDoc Data" → "Run workflow"
+   - `steps` に `scrape` だけ指定して小さくテスト
+   - ログ artifact をダウンロードして結果確認
+
+3. **全ステップ通しテスト**
+   - 手動トリガーでステップ指定なし（全ステップ）実行
+   - Turso上のデータが更新されることを確認
+   - Vercel上のWebアプリで検索結果が反映されることを確認
+
+4. **cronで日次自動実行を確認**
+   - 翌日03:00 JST以降にActions履歴を確認
+   - 成功していれば本番稼働完了
+
+---
+
 ## Phase 1: データ完備 (Data Completion)
 
 ### 1.1 未対応省庁スクレイパー追加
@@ -81,8 +110,9 @@
 - [x] FTS差分更新 (`scripts/update_fts.ts`)
 - [x] 統計API (`/api/stats`)
 - [x] 実行ログのJSON出力 (`logs/update_*.json`)
-- [ ] GitHub Actions Secrets の設定（R2, Turso credentials）
-- [ ] dev.db のR2バックアップ初回アップロード
+- [x] Turso直接書き込み対応 (`scripts/db.py`, dev.db転送不要)
+- [ ] GitHub Actions Secrets の設定 → **NEXTセクション参照**
+- [ ] 手動トリガーでの初回動作確認 → **NEXTセクション参照**
 - [ ] `lastConfirmedAt` を活用したデータ鮮度管理
 
 ### 4.2 監視・品質
@@ -99,7 +129,7 @@
 
 ## Technical Debt
 
-- [ ] README.md をプロジェクト固有の内容に更新（現在はcreate-next-appのデフォルト）
+- [x] README.md をプロジェクト固有の内容に更新
 - [ ] テスト追加（検索ロジック、スクレイパーの単体テスト）
 - [ ] エラーハンドリングの統一（スクレイパー間で差異あり）
 - [ ] Python scripts の型ヒント追加
