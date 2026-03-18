@@ -1,6 +1,6 @@
 # GovDoc Work Plan
 
-## Current Status (2026-03-11)
+## Current Status (2026-03-18)
 
 ### Data Coverage
 | 指標 | 数値 |
@@ -9,52 +9,31 @@
 | 添付ファイル | 59,289件 |
 | PDF DL済 | 59,126件 (99.7%) |
 | テキスト抽出済 | 58,558件 (98.8%) |
-| 対応省庁 | 14/19省庁 |
+| 対応省庁 | 18/19省庁 |
 
-### Covered Ministries (14)
-国会, 厚労省, 国交省, 文科省, 経産省, 環境省, 内閣府, 農水省, 総務省, 首相官邸, 金融庁, 内閣官房, 財務省, 防衛省
+### Covered Ministries (18)
+国会, 厚労省, 国交省, 文科省, 経産省, 環境省, 内閣府, 農水省, 総務省, 首相官邸, 金融庁, 内閣官房, 財務省, 防衛省, デジタル庁, 法務省, 外務省, 警察庁
 
-### Uncovered Ministries (5)
-デジタル庁, 法務省, 外務省, 警察庁, その他
+### Uncovered Ministries (1)
+その他
 
 ---
 
-## NEXT: 本番パイプライン稼働
+## Completed: 本番パイプライン稼働 (2026-03-17)
 
-以下を順に実施して日次自動更新を稼働させる:
-
-1. **GitHub Actions Secrets を設定**
-   - リポジトリの Settings → Secrets and variables → Actions に追加:
-     - `TURSO_DATABASE_URL` — `libsql://govdoc-tsukukobaan.aws-ap-northeast-1.turso.io`
-     - `TURSO_AUTH_TOKEN` — Turso JWT auth token
-     - `R2_ACCOUNT_ID` — Cloudflare account ID
-     - `R2_ACCESS_KEY_ID` — R2 API key
-     - `R2_SECRET_ACCESS_KEY` — R2 secret
-     - `R2_BUCKET_NAME` — `govdoc-pdfs`
-
-2. **手動トリガーで初回テスト**
-   - Actions タブ → "Update GovDoc Data" → "Run workflow"
-   - `steps` に `scrape` だけ指定して小さくテスト
-   - ログ artifact をダウンロードして結果確認
-
-3. **全ステップ通しテスト**
-   - 手動トリガーでステップ指定なし（全ステップ）実行
-   - Turso上のデータが更新されることを確認
-   - Vercel上のWebアプリで検索結果が反映されることを確認
-
-4. **cronで日次自動実行を確認**
-   - 翌日03:00 JST以降にActions履歴を確認
-   - 成功していれば本番稼働完了
+- [x] GitHub Actions Secrets 設定
+- [x] 手動トリガーで初回テスト → 成功
+- [x] cron日次自動実行 → 成功（毎日03:00 JST）
 
 ---
 
 ## Phase 1: データ完備 (Data Completion)
 
-### 1.1 未対応省庁スクレイパー追加
-- [ ] デジタル庁 (`digital.py`) — 審議会ページの構造調査 → スクレイパー実装
-- [ ] 法務省 (`moj.py`) — 審議会ページの構造調査 → スクレイパー実装
-- [ ] 外務省 (`mofa.py`) — 審議会ページの構造調査 → スクレイパー実装
-- [ ] 警察庁 (`npa.py`) — 審議会ページの構造調査 → スクレイパー実装
+### 1.1 未対応省庁スクレイパー追加 ✅ (2026-03-18)
+- [x] デジタル庁 (`digital.py`) — 62審議会, ~200+件
+- [x] 法務省 (`moj.py`) — 審議会+検討会+委員会, ~1,200件
+- [x] 外務省 (`mofa.py`) — Playwright+Chrome (Akamai対策), ~30件
+- [x] 警察庁 (`npa.py`) — 複数局にまたがる構造, ~420件
 
 ### 1.2 残りPDF処理
 - [ ] 未ダウンロード163件の処理（エラー原因調査・リトライ）
@@ -111,8 +90,8 @@
 - [x] 統計API (`/api/stats`)
 - [x] 実行ログのJSON出力 (`logs/update_*.json`)
 - [x] Turso直接書き込み対応 (`scripts/db.py`, dev.db転送不要)
-- [ ] GitHub Actions Secrets の設定 → **NEXTセクション参照**
-- [ ] 手動トリガーでの初回動作確認 → **NEXTセクション参照**
+- [x] GitHub Actions Secrets の設定 (2026-03-17)
+- [x] 手動トリガーでの初回動作確認 (2026-03-17)
 - [ ] `lastConfirmedAt` を活用したデータ鮮度管理
 
 ### 4.2 監視・品質
